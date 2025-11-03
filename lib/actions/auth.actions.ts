@@ -6,7 +6,8 @@ import {headers} from "next/headers";
 
 export const signUpWithEmail = async ({ email, password, fullName, country, investmentGoals, riskTolerance, preferredIndustry }: SignUpFormData) => {
     try {
-        const response = await auth.api.signUpEmail({ body: { email, password, name: fullName } })
+        const a = await auth();
+        const response = await a.api.signUpEmail({ body: { email, password, name: fullName } })
 
         if(response) {
             await inngest.send({
@@ -25,20 +26,31 @@ export const signUpWithEmail = async ({ email, password, fullName, country, inve
 
 export const signInWithEmail = async ({ email, password }: SignInFormData) => {
     try {
-        const response = await auth.api.signInEmail({ body: { email, password } })
+        const a = await auth();
+        const response = await a.api.signInEmail({
+            body: { email, password }
+        });
 
-        return { success: true, data: response }
+        return { success: true, data: response };
     } catch (e: any) {
-        console.log('Sign in failed', e)
-        return { success: false, error: 'Sign in failed' }
-    }
-}
+        console.log("SignIn error:", e);
 
+        return {
+            success: false,
+            error:
+                e?.message ??
+                e?.response?.data?.message ??
+                "Invalid email or password"
+        };
+    }
+};
 export const signOut = async () => {
     try {
-        await auth.api.signOut({ headers: await headers() });
+        const a = await auth();
+        await a.api.signOut({ headers: await headers() });
     } catch (e) {
         console.log('Sign out failed', e)
         return { success: false, error: 'Sign out failed' }
     }
 }
+

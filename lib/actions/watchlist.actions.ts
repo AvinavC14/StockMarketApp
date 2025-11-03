@@ -11,7 +11,9 @@ import { getStocksDetails } from './finnhub.actions';
 // ✅ Add stock to watchlist
 export const addToWatchlist = async (symbol: string, company: string) => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    
+    const { api } = await auth();
+    const session = await api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
 
@@ -39,10 +41,10 @@ export const addToWatchlist = async (symbol: string, company: string) => {
   }
 };
 
-// ✅ Remove stock from watchlist
 export const removeFromWatchlist = async (symbol: string) => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { api } = await auth();
+    const session = await api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     await Watchlist.deleteOne({
@@ -57,11 +59,10 @@ export const removeFromWatchlist = async (symbol: string) => {
     throw new Error('Failed to remove stock from watchlist');
   }
 };
-
-// ✅ Get user’s watchlist
 export const getUserWatchlist = async () => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { api } = await auth();
+    const session = await api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     const watchlist = await Watchlist.find({ userId: session.user.id })
@@ -75,13 +76,10 @@ export const getUserWatchlist = async () => {
   }
 };
 
-// ✅ Get watchlist with live data
-// Get user's watchlist with stock data
 export const getWatchlistWithData = async () => {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const { api } = await auth();
+    const session = await api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     const watchlist = await Watchlist.find({ userId: session.user.id }).sort({ addedAt: -1 }).lean();
@@ -116,9 +114,6 @@ export const getWatchlistWithData = async () => {
     throw new Error('Failed to fetch watchlist');
   }
 };
-
-// lib/actions/watchlist.actions.ts
-
 export const getWatchlistSymbolsByEmail = async (email: string) => {
   try {
     const items = await Watchlist.find({ email }).lean();
@@ -130,3 +125,4 @@ export const getWatchlistSymbolsByEmail = async (email: string) => {
     return [];
   }
 };
+  

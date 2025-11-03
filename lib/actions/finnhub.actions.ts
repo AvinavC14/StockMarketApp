@@ -90,7 +90,8 @@ async function fetchWithRateLimit<T>(
 export const searchStocks = cache(
   async (query?: string): Promise<StockWithWatchlistStatus[]> => {
     try {
-      const session = await auth.api.getSession({
+      const authInstance = await auth();
+      const session = await authInstance.api.getSession({
         headers: await headers(),
       });
       if (!session?.user) redirect('/sign-in');
