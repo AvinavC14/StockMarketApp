@@ -25,6 +25,26 @@ export async function auth() {
             autoSignIn: true,
         },
         plugins: [nextCookies()],
+        user: {
+            additionalFields: {
+                country: {
+                    type: "string",
+                    required: false,
+                },
+                investmentGoals: {
+                    type: "string",
+                    required: false,
+                },
+                riskTolerance: {
+                    type: "string",
+                    required: false,
+                },
+                preferredIndustry: {
+                    type: "string",
+                    required: false,
+                },
+            },
+        },
     });
 
     return authInstance;
