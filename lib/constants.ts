@@ -2,6 +2,7 @@ export const NAV_ITEMS = [
     { href: '/', label: 'Dashboard' },
     { href: '/search', label: 'Search' },
     { href: '/watchlist', label: 'Watchlist' },
+    { href: '/recommendations', label: 'Recommendations' },
 ];
 
 export const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
