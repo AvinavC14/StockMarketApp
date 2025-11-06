@@ -3,6 +3,7 @@ import { searchStocks } from '@/lib/actions/finnhub.actions';
 import SearchCommand from '@/components/SearchCommand';
 import { getWatchlistWithData } from '@/lib/actions/watchlist.actions';
 import { WatchlistTable } from '@/components/WatchlistTable';
+import PortfolioRiskMeter from '@/components/PortfolioRiskMeter';
 
 const Watchlist = async () => {
   const watchlist = await getWatchlistWithData();
@@ -31,6 +32,7 @@ const Watchlist = async () => {
           <h2 className="watchlist-title">Watchlist</h2>
           <SearchCommand initialStocks={initialStocks} />
         </div>
+        <PortfolioRiskMeter/>
         <WatchlistTable watchlist={watchlist} />
       </div>
     </section>
