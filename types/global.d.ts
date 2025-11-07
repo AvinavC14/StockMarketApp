@@ -112,13 +112,28 @@ declare global {
     };
 
     type QuoteData = {
-        c?: number;
-        dp?: number;
+        c: number;   
+        h: number;      
+        l: number;    
+        o: number;    
+        pc: number;  
+        dp?: number;  
+        t?: number; 
     };
 
     type ProfileData = {
-        name?: string;
-        marketCapitalization?: number;
+        name: string;
+        marketCapitalization: number;
+        finnhubIndustry: string; 
+        country: string;
+        currency: string;
+        exchange: string;
+        ipo: string;
+        phone: string;
+        shareOutstanding: number;
+        ticker: string;
+        weburl: string;
+        logo: string;
     };
 
     type FinancialsData = {

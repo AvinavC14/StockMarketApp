@@ -20,7 +20,7 @@ import {
 } from '../utils';
 import { cache } from 'react';
 
-// ✅ Load token safely once
+//  Load token safely once
 const FINNHUB_API_KEY =
   process.env.FINNHUB_API_KEY || process.env.NEXT_PUBLIC_FINNHUB_API_KEY;
 
@@ -28,7 +28,7 @@ if (!FINNHUB_API_KEY) {
   console.error('⚠️ Missing FINNHUB_API_KEY environment variable');
 }
 
-// ✅ Helper function to fetch with rate limiting and retry logic
+// Helper function to fetch with rate limiting and retry logic
 async function fetchWithRateLimit<T>(
   url: string,
   cacheKey?: string,
@@ -86,7 +86,7 @@ async function fetchWithRateLimit<T>(
   });
 }
 
-// ✅ Search stocks + mark watchlist status
+// Search stocks + mark watchlist status
 export const searchStocks = cache(
   async (query?: string): Promise<StockWithWatchlistStatus[]> => {
     try {
@@ -146,9 +146,8 @@ export const searchStocks = cache(
               displaySymbol: symbol,
               type: 'Common Stock',
             };
-            // We don't include exchange in FinnhubSearchResult type, so carry via mapping later using profile
-            // To keep pipeline simple, attach exchange via closure map stage
-            // We'll reconstruct exchange when mapping to final type
+            
+            
             (r as any).__exchange = exchange; // internal only
             return r;
           })
@@ -193,54 +192,53 @@ export const searchStocks = cache(
   }
 );
 
-// ✅ Fetch full stock details
-// Fetch stock details by symbol
-// Fetch stock details by symbol
-// Fetch stock details by symbol
+// Fetch full stock details
+
 export const getStocksDetails = cache(async (symbol: string) => {
   const cleanSymbol = symbol.trim().toUpperCase();
 
   try {
     const [quote, profile, financials] = await Promise.all([
       fetchJSON(
-        // Price data - no caching for accuracy
         `${FINNHUB_BASE_URL}/quote?symbol=${cleanSymbol}&token=${FINNHUB_API_KEY}`
       ),
       fetchJSON(
-        // Company info - cache 1hr (rarely changes)
         `${FINNHUB_BASE_URL}/stock/profile2?symbol=${cleanSymbol}&token=${FINNHUB_API_KEY}`,
         3600 as unknown as RequestInit
       ),
       fetchJSON(
-        // Financial metrics (P/E, etc.) - cache 30min
         `${FINNHUB_BASE_URL}/stock/metric?symbol=${cleanSymbol}&metric=all&token=${FINNHUB_API_KEY}`,
         1800 as unknown as RequestInit
       ),
     ]);
 
-    // Type cast the responses
     const quoteData = quote as QuoteData;
     const profileData = profile as ProfileData;
     const financialsData = financials as FinancialsData;
 
-    // Check if we got valid quote and profile data
     if (!quoteData?.c || !profileData?.name)
       throw new Error('Invalid stock data received from API');
 
+    //  EXTRACT ALL REQUIRED FIELDS
+    const currentPrice = quoteData.c;
+    const dayHigh = quoteData.h;      
+    const dayLow = quoteData.l;       
+    const sector = profileData.finnhubIndustry || 'Unknown'; 
     const changePercent = quoteData.dp || 0;
     const peRatio = financialsData?.metric?.peNormalizedAnnual || null;
+    const marketCap = profileData?.marketCapitalization || 0;
 
     return {
       symbol: cleanSymbol,
-      company: profileData?.name,
-      currentPrice: quoteData.c,
+      company: profileData.name,
+      currentPrice,
+      dayHigh,           
+      dayLow,            
+      sector,            
       changePercent,
-      priceFormatted: formatPrice(quoteData.c),
-      changeFormatted: formatChangePercent(changePercent),
-      peRatio: peRatio?.toFixed(1) || '—',
-      marketCapFormatted: formatMarketCapValue(
-        profileData?.marketCapitalization || 0
-      ),
+      peRatio,
+      marketCap,       
+      
     };
   } catch (error) {
     console.error(`Error fetching details for ${cleanSymbol}:`, error);

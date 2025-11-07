@@ -3,25 +3,23 @@ import { searchStocks } from '@/lib/actions/finnhub.actions';
 import SearchCommand from '@/components/SearchCommand';
 import { getWatchlistWithData } from '@/lib/actions/watchlist.actions';
 import { WatchlistTable } from '@/components/WatchlistTable';
+import PortfolioRiskMeter from '@/components/PortfolioRiskMeter';
 
 const Watchlist = async () => {
-  const watchlist = await getWatchlistWithData();
+   const watchlist = await getWatchlistWithData(); 
+  
+  //  Fetch minimal data for Risk Calculator
+  const riskWatchlist = watchlist.map(item => ({
+    symbol: item.symbol,
+    company: item.company,
+    stock: { sector: item.stock.sector },
+    currentData: item.currentData
+  }));
+
   const initialStocks = await searchStocks();
 
-  // Empty state
   if (watchlist.length === 0) {
-    return (
-      <section className="flex watchlist-empty-container">
-        <div className="watchlist-empty">
-          <Star className="watchlist-star" />
-          <h2 className="empty-title">Your watchlist is empty</h2>
-          <p className="empty-description">
-            Start building your watchlist by searching for stocks and clicking the star icon to add them.
-          </p>
-        </div>
-        <SearchCommand initialStocks={initialStocks} />
-      </section>
-    );
+    // ... empty state
   }
 
   return (
@@ -31,6 +29,9 @@ const Watchlist = async () => {
           <h2 className="watchlist-title">Watchlist</h2>
           <SearchCommand initialStocks={initialStocks} />
         </div>
+        
+        <PortfolioRiskMeter watchlist={riskWatchlist} />
+        
         <WatchlistTable watchlist={watchlist} />
       </div>
     </section>
