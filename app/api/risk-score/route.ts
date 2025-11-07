@@ -1,42 +1,35 @@
+
 import { NextResponse } from 'next/server';
 import { getWatchlistWithData } from '@/lib/actions/watchlist.actions';
 import { calculatePortfolioRisk } from '@/lib/risk-calculator';
-import { getStocksDetails } from '@/lib/actions/finnhub.actions';
 
 export async function GET() {
   try {
     const watchlist = await getWatchlistWithData();
+    
+    
+    const riskWatchlist = watchlist.map(item => ({
+      symbol: item.symbol,
+      company: item.company,
+      stock: {
+        sector: item.stock.sector || 'Unknown'
+      },
+      currentData: item.currentData 
+    }));
 
-    const enrichedWatchlist = await Promise.all(
-      watchlist.map(async (item:any) => {
-        try {
-          const details = await getStocksDetails(item.symbol);
-          return {
-            ...item,
-            currentData: {
-              c: details.currentPrice,
-              h: details.currentPrice * 1.02, // optional: intraday high proxy
-              l: details.currentPrice * 0.98, // optional: intraday low proxy
-            },
-            stock: {
-              sector: 'Technology', // or fetch actual sector if you have it
-            }
-          };
-        } catch (err) {
-          console.error(`Failed to fetch details for ${item.symbol}`, err);
-          return {
-            ...item,
-            currentData: null
-          };
-        }
-      })
-    );
+    console.log("=== RISK CALCULATOR INPUT ===");
+    console.log(JSON.stringify(riskWatchlist, null, 2));
+    
+    const riskScore = calculatePortfolioRisk(riskWatchlist);
+    console.log("=== CALCULATED RISK ===");
+    console.log(JSON.stringify(riskScore, null, 2));
 
-    const riskScore = calculatePortfolioRisk(enrichedWatchlist);
     return NextResponse.json(riskScore);
-
   } catch (error) {
     console.error('Risk calculation error:', error);
-    return NextResponse.json({ error: 'Failed to calculate risk score' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to calculate risk score' },
+      { status: 500 }
+    );
   }
 }

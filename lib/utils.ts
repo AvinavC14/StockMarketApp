@@ -25,14 +25,13 @@ export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Formatted string like "$3.10T", "$900.00B", "$25.00M" or "$999,999.99"
 export function formatMarketCapValue(marketCapUsd: number): string {
   if (!Number.isFinite(marketCapUsd) || marketCapUsd <= 0) return 'N/A';
 
   if (marketCapUsd >= 1e12) return `$${(marketCapUsd / 1e12).toFixed(2)}T`; // Trillions
   if (marketCapUsd >= 1e9) return `$${(marketCapUsd / 1e9).toFixed(2)}B`; // Billions
   if (marketCapUsd >= 1e6) return `$${(marketCapUsd / 1e6).toFixed(2)}M`; // Millions
-  return `$${marketCapUsd.toFixed(2)}`; // Below one million, show full USD amount
+  return `$${marketCapUsd.toFixed(2)}`; 
 }
 
 export const getDateRange = (days: number) => {
@@ -137,14 +136,74 @@ export const getFormattedTodayDate = () => {
   return `${year}-${month}-${day}`; // Returns "2025-10-27"
 };
 
-export async function fetchJSON(url: string, options: RequestInit = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(
-      `Fetch failed with status ${response.status} for URL: ${url}`
-    );
+
+//ENHANCED fetchJSON WITH RATE LIMITING + CACHING
+
+// Add this generic type signature
+export async function fetchJSON<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  // 1. DETERMINE CACHE STRATEGY
+  const isQuote = url.includes('/quote?');
+  const isProfile = url.includes('/stock/profile2?');
+  const cache = isQuote 
+    ? stockQuoteCache 
+    : isProfile 
+      ? stockProfileCache 
+      : newsCache;
+
+  // Create cache key (symbol-based for Finnhub endpoints)
+  let cacheKey = url;
+  try {
+    const urlObj = new URL(url);
+    const symbol = urlObj.searchParams.get('symbol');
+    if (symbol) {
+      cacheKey = `${urlObj.pathname}?symbol=${symbol}`;
+    }
+  } catch (e) {
+    // Fallback to full URL if parsing fails
   }
-  return response.json();
+
+  // 2. RETURN CACHED DATA IF AVAILABLE
+  const cached = cache.get(cacheKey) as T | null; 
+  if (cached) {
+    console.log(`[CACHE HIT] ${cacheKey}`);
+    return cached;
+  }
+
+  // 3. EXECUTE WITH RATE LIMITING
+  try {
+    const result = await finnhubRateLimiter.execute(async (): Promise<T> => { 
+      console.log(`[FETCHING] ${url}`);
+      const response = await fetch(url, {
+        ...options,
+        next: { revalidate: 0 }, // Disable Next.js fetch cache
+      });
+
+      // 4. HANDLE 429 ERRORS (retry once after 2s delay)
+      if (response.status === 429) {
+        console.warn('⚠️ Finnhub rate limited - retrying in 2s');
+        await delay(2000);
+        return fetchJSON<T>(url, options); 
+      }
+
+      if (!response.ok) {
+        throw new Error(`Fetch failed: ${response.status} for ${url}`);
+      }
+
+      return (await response.json()) as T;
+    });
+
+
+    // 5. CACHE SUCCESSFUL RESPONSE
+    cache.set(cacheKey, result);
+    return result;
+  }  catch (error) {
+    // 6. STALE CACHE FALLBACK
+    if (cached) {
+      console.warn(`[STALE CACHE] Using outdated data for ${cacheKey}`);
+      return cached;
+    }
+    throw error;
+  }
 }
 
 export function getPastDate(days: number): string {
@@ -153,9 +212,9 @@ export function getPastDate(days: number): string {
   return d.toISOString().split('T')[0];
 }
 
-// ============================================
-// ✅ RATE LIMITER
-// ============================================
+
+//  RATE LIMITER
+
 
 class RateLimiter {
   private queue: Array<() => Promise<any>> = [];
@@ -164,7 +223,7 @@ class RateLimiter {
   private minInterval: number;
 
   constructor(requestsPerMinute: number = 50) {
-    // 50 requests per minute with buffer (Finnhub free tier allows 60)
+    // 50 requests per minute with buffer 
     this.minInterval = (60 * 1000) / requestsPerMinute;
   }
 
@@ -206,7 +265,7 @@ class RateLimiter {
     this.lastRequestTime = Date.now();
     await task();
 
-    // Process next item
+    
     this.processQueue();
   }
 }
@@ -214,9 +273,9 @@ class RateLimiter {
 // Export singleton instance for Finnhub API
 export const finnhubRateLimiter = new RateLimiter(50);
 
-// ============================================
-// ✅ CACHE SYSTEM
-// ============================================
+
+// CACHE SYSTEM
+
 
 interface CacheEntry<T> {
   data: T;
@@ -262,7 +321,7 @@ class SimpleCache<T> {
 }
 
 // Export cache instances with appropriate TTLs
-export const stockProfileCache = new SimpleCache<any>(60); // 60 minutes for profiles (rarely change)
-export const stockQuoteCache = new SimpleCache<any>(1); // 1 minute for quotes (change frequently)
+export const stockProfileCache = new SimpleCache<any>(60); // 60 minutes for profiles
+export const stockQuoteCache = new SimpleCache<any>(1); // 1 minute for quotes
 export const newsCache = new SimpleCache<any>(10); // 10 minutes for news
 export const searchCache = new SimpleCache<any>(5); // 5 minutes for search results
