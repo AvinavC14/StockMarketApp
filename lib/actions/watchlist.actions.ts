@@ -88,7 +88,8 @@ export const getUserWatchlist = async () => {
 
 export const getWatchlistWithData = async () => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { api } = await auth();
+    const session = await api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     const watchlist = await Watchlist.find({ userId: session.user.id })
