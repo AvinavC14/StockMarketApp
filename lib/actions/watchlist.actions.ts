@@ -16,9 +16,7 @@ import { getStocksDetails } from './finnhub.actions';
 // Add stock to watchlist
 export const addToWatchlist = async (symbol: string, company: string) => {
   try {
-    
-    const { api } = await auth();
-    const session = await api.getSession({ headers: await headers() });
+    const session = await (await auth()).api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
 
@@ -49,8 +47,7 @@ export const addToWatchlist = async (symbol: string, company: string) => {
 // Remove stock from watchlist
 export const removeFromWatchlist = async (symbol: string) => {
   try {
-    const { api } = await auth();
-    const session = await api.getSession({ headers: await headers() });
+    const session = await (await auth()).api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     await Watchlist.deleteOne({
@@ -69,8 +66,7 @@ export const removeFromWatchlist = async (symbol: string) => {
 //  Get user’s watchlist
 export const getUserWatchlist = async () => {
   try {
-    const { api } = await auth();
-    const session = await api.getSession({ headers: await headers() });
+    const session = await (await auth()).api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     const watchlist = await Watchlist.find({ userId: session.user.id })
@@ -88,7 +84,7 @@ export const getUserWatchlist = async () => {
 
 export const getWatchlistWithData = async () => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const session = await (await auth()).api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
     const watchlist = await Watchlist.find({ userId: session.user.id })
@@ -168,4 +164,3 @@ export const getWatchlistSymbolsByEmail = async (email: string) => {
     return [];
   }
 };
-  
