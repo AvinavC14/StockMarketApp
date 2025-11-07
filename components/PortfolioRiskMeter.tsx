@@ -1,6 +1,8 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { RuntimeWatchlistItem } from '@/lib/risk-calculator';
 
 type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -16,7 +18,6 @@ const RISK_MESSAGES = {
   HIGH: 'High concentration risk - immediate attention recommended'
 };
 
-// Donut chart component
 const DonutChart = ({ score, size = 120 }: { score: number; size?: number }) => {
   const radius = (size - 10) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -30,7 +31,6 @@ const DonutChart = ({ score, size = 120 }: { score: number; size?: number }) => 
         height={size}
         className="transform -rotate-90"
       >
-        
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -39,7 +39,6 @@ const DonutChart = ({ score, size = 120 }: { score: number; size?: number }) => 
           strokeWidth="8"
           fill="transparent"
         />
-        
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -61,7 +60,7 @@ const DonutChart = ({ score, size = 120 }: { score: number; size?: number }) => 
   );
 };
 
-export default function PortfolioRiskMeter() {
+export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWatchlistItem[]}) {
   const [riskData, setRiskData] = useState({
     score: 0,
     level: 'LOW' as RiskLevel,
@@ -89,8 +88,8 @@ export default function PortfolioRiskMeter() {
 
   useEffect(() => {
     fetchData();
-    //const interval = setInterval(fetchData, 120000); // Every 2 minutes
-    //return () => clearInterval(interval);
+    const interval = setInterval(fetchData, 120_000); // 2 minutes
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -125,7 +124,6 @@ export default function PortfolioRiskMeter() {
         </span>
       </div>
       
-      {/* Donut Chart */}
       <div className={`flex justify-center mb-4 ${colorClass}`}>
         <DonutChart score={riskData.score} size={120} />
       </div>

@@ -1,4 +1,9 @@
 'use server';
+import {
+  formatPrice,
+  formatChangePercent,
+  formatMarketCapValue
+} from '@/lib/utils';
 
 import { revalidatePath } from 'next/cache';
 import { auth } from '../better-auth/auth';
@@ -8,7 +13,7 @@ import {Watchlist} from '@/database/models/watchlist.model';
 import { getStocksDetails } from './finnhub.actions';
 
 
-// ✅ Add stock to watchlist
+// Add stock to watchlist
 export const addToWatchlist = async (symbol: string, company: string) => {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -39,7 +44,7 @@ export const addToWatchlist = async (symbol: string, company: string) => {
   }
 };
 
-// ✅ Remove stock from watchlist
+// Remove stock from watchlist
 export const removeFromWatchlist = async (symbol: string) => {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -58,7 +63,7 @@ export const removeFromWatchlist = async (symbol: string) => {
   }
 };
 
-// ✅ Get user’s watchlist
+//  Get user’s watchlist
 export const getUserWatchlist = async () => {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -75,49 +80,78 @@ export const getUserWatchlist = async () => {
   }
 };
 
-// ✅ Get watchlist with live data
-// Get user's watchlist with stock data
+// Get watchlist with live data
+
 export const getWatchlistWithData = async () => {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) redirect('/sign-in');
 
-    const watchlist = await Watchlist.find({ userId: session.user.id }).sort({ addedAt: -1 }).lean();
+    const watchlist = await Watchlist.find({ userId: session.user.id })
+      .sort({ addedAt: -1 })
+      .lean();
 
     if (watchlist.length === 0) return [];
 
-    const stocksWithData = await Promise.all(
+    const enrichedWatchlist = await Promise.all(
       watchlist.map(async (item) => {
-        const stockData = await getStocksDetails(item.symbol);
-
-        if (!stockData) {
-          console.warn(`Failed to fetch data for ${item.symbol}`);
-          return item;
+        try {
+          const stockData = await getStocksDetails(item.symbol);
+          
+          
+          return {
+            // Fields for WatchlistTable
+            _id: item._id.toString(),
+            userId: session.user.id,
+            symbol: item.symbol,
+            company: item.company,
+            addedAt: item.addedAt,
+            currentPrice: stockData?.currentPrice || 0,
+            changePercent: stockData?.changePercent || 0,
+            priceFormatted: stockData?.currentPrice ? formatPrice(stockData.currentPrice) : '—',
+            changeFormatted: stockData?.changePercent ? formatChangePercent(stockData.changePercent) : '—',
+            marketCap: stockData?.marketCap ? formatMarketCapValue(stockData.marketCap * 1e6) : '—',
+            peRatio: stockData?.peRatio?.toFixed(1) || '—',
+            
+            // Fields for Risk Calculator (nested structure)
+            stock: {
+              sector: stockData?.sector || 'Unknown'
+            },
+            currentData: stockData?.currentPrice ? {
+              c: stockData.currentPrice,
+              h: stockData.dayHigh || stockData.currentPrice * 1.02,
+              l: stockData.dayLow || stockData.currentPrice * 0.98
+            } : null
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch ${item.symbol}`);
+          return {
+            _id: item._id.toString(),
+            userId: session.user.id,
+            symbol: item.symbol,
+            company: item.company,
+            addedAt: item.addedAt,
+            currentPrice: 0,
+            changePercent: 0,
+            priceFormatted: '—',
+            changeFormatted: '—',
+            marketCap: '—',
+            peRatio: '—',
+            stock: { sector: 'Unknown' },
+            currentData: null
+          };
         }
-
-        return {
-          company: stockData.company,
-          symbol: stockData.symbol,
-          currentPrice: stockData.currentPrice,
-          priceFormatted: stockData.priceFormatted,
-          changeFormatted: stockData.changeFormatted,
-          changePercent: stockData.changePercent,
-          marketCap: stockData.marketCapFormatted,
-          peRatio: stockData.peRatio,
-        };
-      }),
+      })
     );
 
-    return JSON.parse(JSON.stringify(stocksWithData));
+    return enrichedWatchlist;
   } catch (error) {
     console.error('Error loading watchlist:', error);
-    throw new Error('Failed to fetch watchlist');
+    return [];
   }
 };
 
-// lib/actions/watchlist.actions.ts
+
 
 export const getWatchlistSymbolsByEmail = async (email: string) => {
   try {

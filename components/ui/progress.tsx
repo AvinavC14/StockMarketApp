@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ProgressProps {
-  value: number; // 0-100
+  value: number; 
   className?: string;
   indicatorClassName?: string;
 }
