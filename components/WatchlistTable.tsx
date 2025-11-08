@@ -58,9 +58,6 @@ export function WatchlistTable({ watchlist }: WatchlistTableProps) {
                 {item.peRatio || '—'}
               </TableCell>
               <TableCell>
-                <Button className='add-alert'>Add Alert</Button>
-              </TableCell>
-              <TableCell>
                 <WatchlistButton
                   symbol={item.symbol}
                   company={item.company}
