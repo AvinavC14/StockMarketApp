@@ -1,7 +1,7 @@
-
+// components/PortfolioRiskMeter.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { RuntimeWatchlistItem } from '@/lib/risk-calculator';
 
 type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -60,6 +60,33 @@ const DonutChart = ({ score, size = 120 }: { score: number; size?: number }) => 
   );
 };
 
+// Helper function to format time ago
+const formatTimeAgo = (timestamp: number) => {
+  const now = Date.now();
+  const diffInSeconds = Math.floor((now - timestamp) / 1000);
+  
+  if (diffInSeconds < 60) return 'just now';
+  if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} min ago`;
+  }
+  if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hr ago`;
+  }
+  const days = Math.floor(diffInSeconds / 86400);
+  return `${days} day ago`;
+};
+
+// Helper function to format exact timestamp
+const formatExactTime = (timestamp: number) => {
+  return new Date(timestamp).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
 export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWatchlistItem[]}) {
   const [riskData, setRiskData] = useState({
     score: 0,
@@ -68,6 +95,7 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchTime = useRef<number | null>(null);
 
   const fetchData = async () => {
     try {
@@ -77,6 +105,7 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
       
       const data = await response.json();
       setRiskData(data);
+      lastFetchTime.current = Date.now();
       setError(null);
     } catch (err) {
       setError('Unable to calculate risk score');
@@ -88,8 +117,18 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 120_000); // 2 minutes
+    const interval = setInterval(fetchData, 300_000); // 2 minutes
     return () => clearInterval(interval);
+  }, []);
+
+  // Real-time clock for dynamic updates
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
   }, []);
 
   if (loading) {
@@ -101,6 +140,7 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
         </div>
         <div className="h-4 bg-muted rounded w-full"></div>
         <div className="h-4 bg-muted rounded w-2/3"></div>
+        <div className="h-3 bg-muted rounded w-1/2"></div>
       </div>
     );
   }
@@ -108,12 +148,14 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
   if (error) {
     return (
       <div className="p-4 bg-destructive/10 text-destructive rounded-lg max-w-xs">
-        {error}
-      </div>
+      {error}
+    </div>
     );
   }
 
   const colorClass = RISK_COLORS[riskData.level];
+  const timeAgo = lastFetchTime.current ? formatTimeAgo(lastFetchTime.current) : null;
+  const exactTime = lastFetchTime.current ? formatExactTime(lastFetchTime.current) : null;
 
   return (
     <div className="border rounded-lg p-6 shadow-sm bg-card max-w-xs">
@@ -136,6 +178,15 @@ export default function PortfolioRiskMeter({ watchlist }: { watchlist: RuntimeWa
         <span className="text-muted-foreground">Volatility Index:</span>
         <span className="font-medium">{(riskData.volatility * 100).toFixed(1)}%</span>
       </div>
+      
+      {/* ✅ Both relative time AND exact timestamp */}
+      {timeAgo && exactTime && (
+        <div className="mt-3 pt-3 border-t border-gray-200/20">
+          <p className="text-xs text-muted-foreground text-center">
+            Last updated: {timeAgo} ({exactTime})
+          </p>
+        </div>
+      )}
     </div>
   );
 }

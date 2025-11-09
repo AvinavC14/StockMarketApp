@@ -337,6 +337,5 @@ export const WATCHLIST_TABLE_HEADER = [
     'Change',
     'Market Cap',
     'P/E Ratio',
-    'Alert',
     'Action',
 ];

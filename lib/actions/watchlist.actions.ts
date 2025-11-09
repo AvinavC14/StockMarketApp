@@ -169,4 +169,3 @@ export const getWatchlistSymbolsByEmail = async (email: string) => {
     return [];
   }
 };
-  
