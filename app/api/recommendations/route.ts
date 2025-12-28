@@ -21,14 +21,12 @@ export async function GET(req: NextRequest) {
       }, { status: 200 });
     }
 
-    // ✅ Get user's watchlist
     const watchlistSymbols = await getWatchlistSymbolsByEmail(user.email);
     const hasWatchlist = watchlistSymbols && watchlistSymbols.length > 0;
 
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    
-    if (!geminiApiKey) {
-      console.error("GEMINI_API_KEY not found");
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
+      console.error("GROQ_API_KEY not found");
       return NextResponse.json({ 
         error: "API configuration error",
         recommendations: []
@@ -37,7 +35,6 @@ export async function GET(req: NextRequest) {
 
     const currentDate = new Date().toISOString().split('T')[0];
 
-    // ✅ Diverse stock universes by industry
     const stockUniverses: Record<string, string[]> = {
       Technology: [
         'AAPL', 'MSFT', 'GOOGL', 'META', 'NVDA', 'AMD', 'INTC', 'ORCL', 
@@ -73,7 +70,6 @@ export async function GET(req: NextRequest) {
 
     const relevantStocks = stockUniverses[preferredIndustry] || stockUniverses.Technology;
 
-    // ✅ Build context-aware prompt
     let watchlistContext = '';
     let exclusionNote = '';
     let diversificationNote = '';
@@ -82,7 +78,6 @@ export async function GET(req: NextRequest) {
       watchlistContext = `\n\nUser's Current Watchlist:\n${watchlistSymbols.join(', ')}`;
       exclusionNote = `\n4. CRITICAL: DO NOT recommend ANY stocks that are already in the user's watchlist (${watchlistSymbols.join(', ')}). Only recommend NEW stocks.`;
       
-      // Analyze watchlist for diversification suggestions
       const techStocksInWatchlist = watchlistSymbols.filter(s => 
         stockUniverses.Technology?.includes(s)
       ).length;
@@ -116,41 +111,36 @@ Your recommendations should:
 - Complement their existing portfolio
 - Fill gaps in their watchlist coverage` : '\nThe user has an empty watchlist. Recommend foundational stocks for their portfolio.'}
 
-Return ONLY a valid JSON array with NO markdown or extra text:
+Return ONLY a valid JSON array with NO markdown, XML tags, explanations, or extra text. 
+Your entire output must be parseable by JSON.parse().
+Begin with '[' and end with ']'.
+
+Example of correct output:
 [
-  { "symbol": "NVDA", "reason": "AI chip leader dominating datacenter market with 150% YoY growth and strong moat", "risk": "Medium" },
-  { "symbol": "CRWD", "reason": "Cybersecurity innovator with 60%+ revenue growth and expanding enterprise adoption", "risk": "High" }
+  { "symbol": "JPM", "reason": "Global banking leader with consistent earnings", "risk": "Medium" }
 ]`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqApiKey}`
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.8, // Balanced creativity
-            maxOutputTokens: 1500,
-            topP: 0.9,
-          }
+          model: 'moonshotai/kimi-k2-instruct-0905',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.8,
+          max_tokens: 1500,
+          top_p: 0.9
         })
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API Error:", errorText);
+      console.error("Groq API Error:", errorText);
       return NextResponse.json({ 
         error: "Failed to generate recommendations",
         recommendations: []
@@ -158,7 +148,7 @@ Return ONLY a valid JSON array with NO markdown or extra text:
     }
 
     const data = await response.json();
-    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = data.choices?.[0]?.message?.content;
 
     if (!aiResponse) {
       return NextResponse.json({ 
@@ -170,35 +160,48 @@ Return ONLY a valid JSON array with NO markdown or extra text:
     let parsedRecommendations: { symbol: string; reason: string; risk: string }[] = [];
 
     try {
+      // 🔥 CRITICAL: Strip <think>...</think> and other non-JSON wrappers
       let cleanedResponse = aiResponse.trim();
-      cleanedResponse = cleanedResponse.replace(/```json\s*/g, '');
-      cleanedResponse = cleanedResponse.replace(/```\s*/g, '');
-      cleanedResponse = cleanedResponse.trim();
 
-      parsedRecommendations = JSON.parse(cleanedResponse);
+      // Remove any <think>...</think> blocks (case-insensitive, multi-line)
+      cleanedResponse = cleanedResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+      // Remove markdown code fences
+      cleanedResponse = cleanedResponse.replace(/```json\s*/gi, '');
+      cleanedResponse = cleanedResponse.replace(/```\s*/g, '');
+
+      // Extract only the part between the first '[' and last ']'
+      const start = cleanedResponse.indexOf('[');
+      const end = cleanedResponse.lastIndexOf(']');
+      if (start === -1 || end === -1 || end <= start) {
+        throw new Error("No valid JSON array found");
+      }
+      const jsonStr = cleanedResponse.slice(start, end + 1);
+
+      parsedRecommendations = JSON.parse(jsonStr);
 
       if (!Array.isArray(parsedRecommendations)) {
-        throw new Error("Response is not an array");
+        throw new Error("Parsed response is not an array");
       }
 
-      // ✅ Double-check: Filter out any stocks already in watchlist
+      // Filter out invalid or duplicate recommendations
       if (hasWatchlist) {
         const watchlistSet = new Set(watchlistSymbols.map(s => s.toUpperCase()));
         parsedRecommendations = parsedRecommendations.filter(rec => 
-          !watchlistSet.has(rec.symbol.toUpperCase())
+          rec?.symbol && !watchlistSet.has(rec.symbol.toUpperCase())
         );
       }
 
-      parsedRecommendations = parsedRecommendations.filter(rec => 
-        rec.symbol && rec.reason && rec.risk
-      ).slice(0, 5);
+      parsedRecommendations = parsedRecommendations
+        .filter(rec => rec.symbol && rec.reason && rec.risk)
+        .slice(0, 5);
 
     } catch (e) {
       console.error("Failed to parse AI response:", aiResponse);
       console.error("Parse error:", e);
       
       return NextResponse.json({ 
-        error: "Failed to parse recommendations",
+        error: "Failed to parse AI recommendations",
         recommendations: []
       }, { status: 200 });
     }
@@ -207,11 +210,7 @@ Return ONLY a valid JSON array with NO markdown or extra text:
       recommendations: parsedRecommendations,
       generatedAt: currentDate,
       watchlistCount: watchlistSymbols?.length || 0,
-      basedOn: {
-        riskTolerance,
-        preferredIndustry,
-        hasWatchlist
-      },
+      basedOn: { riskTolerance, preferredIndustry, hasWatchlist },
       refreshNote: hasWatchlist 
         ? "Recommendations update dynamically as you modify your watchlist" 
         : "Add stocks to your watchlist for more personalized recommendations"
