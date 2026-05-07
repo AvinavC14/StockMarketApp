@@ -57,8 +57,10 @@ function safeTrim(text: string, limit = 1500): string {
 
 // Welcome Email
 export const sendSignUpEmail = inngest.createFunction(
-  { id: "sign-up-email" },
-  { event: "app/user.created" },
+  {
+    id: "sign-up-email",
+    triggers: [{ event: "app/user.created" }],
+  },
   async ({ event, step }) => {
     const { country, investmentGoals, riskTolerance, preferredIndustry, email, name } = event.data;
 
@@ -102,9 +104,14 @@ export const sendSignUpEmail = inngest.createFunction(
 
 // Daily News Summary
 export const sendDailyNewsSummary = inngest.createFunction(
-  { id: "daily-news-summary" },
-  [{ event: "app/send.daily.news" }, { cron: "0 12 * * *"  }], // daily at 12:00 UTC
-  async ({ step }) => {
+  {
+    id: "daily-news-summary",
+    triggers: [
+      { event: "app/send.daily.news" },
+      { cron: "0 12 * * *" },
+    ],
+  },
+  async ({ step }) =>  {
     //Get all users
     const users = await step.run("get-all-users", getAllUsersForNewsEmail);
     if (!users || users.length === 0) {
