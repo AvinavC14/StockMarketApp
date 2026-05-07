@@ -77,7 +77,7 @@ export const sendSignUpEmail = inngest.createFunction(
     // Generate personalized intro with Groq
     const introText = await step.run("generate-welcome-intro", async () => {
       const completion = await groq.chat.completions.create({
-        model: "moonshotai/kimi-k2-instruct-0905",
+        model: "llama-3.1-8b-instant",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.5,
         max_tokens: 400,
@@ -183,7 +183,7 @@ export const sendDailyNewsSummary = inngest.createFunction(
           );
 
           const htmlSummary = await groq.chat.completions.create({
-            model: "moonshotai/kimi-k2-instruct-0905",
+            model: "llama-3.1-8b-instant",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.3,
             max_tokens: 1500,

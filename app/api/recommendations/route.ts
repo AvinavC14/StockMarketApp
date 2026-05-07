@@ -129,7 +129,7 @@ Example of correct output:
           'Authorization': `Bearer ${groqApiKey}`
         },
         body: JSON.stringify({
-          model: 'moonshotai/kimi-k2-instruct-0905',
+          model: 'llama-3.1-8b-instant',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.8,
           max_tokens: 1500,

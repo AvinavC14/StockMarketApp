@@ -32,7 +32,7 @@ export async function generateUnifiedSummary(newsData: any) {
 
   // Send prompt to Groq
   const response = await groq.chat.completions.create({
-    model: "moonshotai/kimi-k2-instruct-0905",
+    model: "llama-3.1-8b-instant",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.4,
     max_tokens: 2048,
