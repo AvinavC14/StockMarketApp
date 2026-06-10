@@ -7,9 +7,9 @@ import {
 } from "@/lib/inngest/prompts";
 import { sendNewsSummaryEmail, sendWelcomeEmail } from "@/lib/nodemailer";
 import { getAllUsersForNewsEmail } from "@/lib/actions/user.actions";
-import { getWatchlistSymbolsByEmail } from "@/lib/actions/watchlist.actions";
 import { getNews } from "@/lib/actions/finnhub.actions";
 import { getFormattedTodayDate } from "@/lib/utils";
+import { getWatchlistSymbolsByEmail, updateNewsRotationOffset } from "@/lib/actions/watchlist.actions";
 
 // Initialize Groq client
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -24,6 +24,7 @@ type UserForNewsEmail = {
   investmentGoals?: string;
   riskTolerance?: string;
   preferredIndustry?: string;
+  newsRotationOffset?: number;
 };
 
 type MarketNewsArticle = {
@@ -119,60 +120,57 @@ export const sendDailyNewsSummary = inngest.createFunction(
     }
 
     // Fetch user-specific news
-    const results = await step.run("fetch-user-news", async () => {
-      const perUser: Array<{ user: UserForNewsEmail; articles: MarketNewsArticle[] }> = [];
+   const results = await step.run("fetch-user-news", async () => {
+  const perUser: Array<{ user: UserForNewsEmail; articles: MarketNewsArticle[] }> = [];
 
-      for (const user of users as UserForNewsEmail[]) {
-        try {
-          const symbols = await getWatchlistSymbolsByEmail(user.email);
-          let articles: MarketNewsArticle[] = [];
+  for (const user of users as UserForNewsEmail[]) {
+    try {
+      const symbols = await getWatchlistSymbolsByEmail(user.email);
 
-          if (Array.isArray(symbols) && symbols.length > 0) {
-            const articlesBySymbol = await Promise.all(
-              symbols.map(async (s) => ({
-                symbol: s,
-                articles: (await getNews(s)) || [],
-              }))
-            );
+      let articles: MarketNewsArticle[] = [];
 
-            const targetTotal = 6;
-            const minPerSymbol = Math.min(2, Math.floor(targetTotal / symbols.length));
-            const balanced: MarketNewsArticle[] = [];
+      if (Array.isArray(symbols) && symbols.length > 0) {
+        // Fetch articles for ALL symbols
+        const articlesBySymbol = await Promise.all(
+          symbols.map(async (s) => ({
+            symbol: s,
+            articles: (await getNews(s)) || [],
+          }))
+        );
 
-            // Take minimum per symbol
-            for (const { articles: symbolArticles } of articlesBySymbol) {
-              balanced.push(...symbolArticles.slice(0, minPerSymbol));
-            }
+        const targetTotal = 6;
+        const offset = user.newsRotationOffset ?? 0;
 
-            // Fill remaining slots by interleaving
-            const remaining = targetTotal - balanced.length;
-            if (remaining > 0) {
-              const interleaved: MarketNewsArticle[] = [];
-              const maxIndex = Math.max(...articlesBySymbol.map((s) => s.articles.length));
-              for (let i = minPerSymbol; i < maxIndex && interleaved.length < remaining; i++) {
-                for (const { articles: symbolArticles } of articlesBySymbol) {
-                  if (symbolArticles[i] && interleaved.length < remaining) {
-                    interleaved.push(symbolArticles[i]);
-                  }
-                }
-              }
-              balanced.push(...interleaved);
-            }
+        // Rotate the symbol order using offset
+        const rotated = [
+          ...articlesBySymbol.slice(offset),
+          ...articlesBySymbol.slice(0, offset),
+        ];
 
-            articles = balanced.slice(0, targetTotal);
-          } else {
-            // Fallback: general market news
-            articles = (await getNews())?.slice(0, 6) || [];
-          }
-
-          perUser.push({ user, articles });
-        } catch (e) {
-          console.error("❌ Error preparing user news", user.email, e);
-          perUser.push({ user, articles: [] });
+        // Take 1 article per symbol until we hit 6
+        for (const { articles: symbolArticles } of rotated) {
+          if (articles.length >= targetTotal) break;
+          if (symbolArticles[0]) articles.push(symbolArticles[0]);
         }
+
+        // Calculate and save next offset
+        const nextOffset = (offset + targetTotal) % symbols.length;
+        await updateNewsRotationOffset(user.userId, nextOffset);
+
+      } else {
+        // No watchlist → fallback to general market news
+        articles = (await getNews())?.slice(0, 6) || [];
       }
-      return perUser;
-    });
+
+      perUser.push({ user, articles });
+    } catch (e) {
+      console.error("❌ Error preparing user news", user.email, e);
+      perUser.push({ user, articles: [] });
+    }
+  }
+
+  return perUser;
+});
 
     //Generate summaries
     const userNewsSummaries = await step.run("generate-summaries", async () => {

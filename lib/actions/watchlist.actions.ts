@@ -11,8 +11,9 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {Watchlist} from '@/database/models/watchlist.model';
 import { getStocksDetails } from './finnhub.actions';
-
-
+import { connectToDatabase } from "@/database/mongoose";
+import { ObjectId } from "mongodb";
+import mongoose from "mongoose";
 // Add stock to watchlist
 export const addToWatchlist = async (symbol: string, company: string) => {
   try {
@@ -167,5 +168,32 @@ export const getWatchlistSymbolsByEmail = async (email: string) => {
   } catch (error) {
     console.error('Error fetching watchlist symbols:', error);
     return [];
+  }
+};
+
+export const getWatchlistWithOffset = async (email: string) => {
+  try {
+    const items = await Watchlist.find({ email }).lean();
+    const symbols = items.map((i) => i.symbol.toUpperCase());
+    return symbols;
+  } catch (error) {
+    console.error('Error fetching watchlist symbols:', error);
+    return [];
+  }
+};
+
+export const updateNewsRotationOffset = async (userId: string, newOffset: number) => {
+  try {
+    await connectToDatabase();
+    const db = mongoose.connection.db;
+    
+    if (!db) throw new Error("Database connection not established");
+    
+    await db.collection("user").updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { newsRotationOffset: newOffset } }
+    );
+  } catch (error) {
+    console.error('Error updating news rotation offset:', error);
   }
 };
