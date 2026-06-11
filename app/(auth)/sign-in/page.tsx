@@ -13,7 +13,7 @@ const SignIn = () => {
 
     const { register, handleSubmit, formState: { errors, isSubmitting } } =
         useForm<SignInFormData>({
-            defaultValues: { email: "", password: "" },
+            defaultValues: { email: "demo@signalist.com", password: "demo1234" },
         });
 
     const onSubmit = async (data: SignInFormData) => {
